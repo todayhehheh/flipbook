@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>꿈드림 플립북 링크 생성</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            background: #0f0f1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            color: #fff;
+            padding: 24px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 540px;
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            padding: 40px 36px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .header h1 span { color: #e8a838; }
+        .header p {
+            font-size: 13px;
+            color: rgba(255,255,255,0.45);
+            line-height: 1.6;
+        }
+
+        /* ── 업로드 가이드 ── */
+        .guide {
+            background: rgba(255,255,255,0.04);
+            border-radius: 14px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .guide-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #e8a838;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .guide-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.65);
+            line-height: 1.5;
+        }
+        .step-num {
+            width: 20px;
+            height: 20px;
+            background: rgba(232,168,56,0.15);
+            color: #e8a838;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .guide-step a {
+            color: #7dd3fc;
+            text-decoration: none;
+        }
+        .guide-step a:hover { text-decoration: underline; }
+
+        /* ── 입력 ── */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .input-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+        }
+        .input-wrap {
+            display: flex;
+            gap: 8px;
+        }
+        .input-wrap input {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 13px 16px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-wrap input:focus { border-color: rgba(232,168,56,0.5); }
+        .input-wrap input::placeholder { color: rgba(255,255,255,0.25); }
+
+        .convert-btn {
+            background: linear-gradient(135deg, #e8a838, #f5c842);
+            border: none;
+            border-radius: 12px;
+            padding: 13px 20px;
+            color: #1a1a2e;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: opacity 0.15s;
+        }
+        .convert-btn:hover { opacity: 0.88; }
+
+        /* ── 에러 ── */
+        #error-msg {
+            display: none;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #fca5a5;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font-size: 13px;
+        }
+
+        /* ── 결과 ── */
+        #result-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .result-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4ade80;
+        }
+        .result-label::before { content: '✓  '; }
+
+        .link-row {
+            display: flex;
+            gap: 8px;
+        }
+        .link-row input {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 11px 14px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+        }
+        .copy-btn {
+            background: rgba(232,168,56,0.15);
+            border: 1px solid rgba(232,168,56,0.35);
+            color: #e8a838;
+            border-radius: 10px;
+            padding: 11px 18px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.15s;
+        }
+        .copy-btn:hover { background: rgba(232,168,56,0.25); }
+        .copy-btn.copied { color: #4ade80; border-color: rgba(74,222,128,0.35); }
+
+        .open-btn {
+            width: 100%;
+            padding: 13px;
+            background: transparent;
+            border: 1px solid rgba(232,168,56,0.3);
+            border-radius: 12px;
+            color: #e8a838;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .open-btn:hover { background: rgba(232,168,56,0.08); }
+
+        .reset-btn {
+            width: 100%;
+            padding: 11px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .reset-btn:hover { border-color: rgba(255,255,255,0.25); color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="header">
+        <h1>꿈드림 <span>플립북</span> 링크 생성</h1>
+        <p>Google Drive에 PDF를 올리고 공유 링크를 붙여넣으면<br>바로 플립북으로 볼 수 있는 링크가 만들어집니다.</p>
+    </div>
+
+    <!-- 업로드 가이드 -->
+    <div class="guide">
+        <div class="guide-title">📂 업로드 방법</div>
+        <div class="guide-step">
+            <div class="step-num">1</div>
+            <span>
+                <a href="https://drive.google.com/drive/folders/1DxVmNUprr6Mi6ucbEVvQAItMTYKsNI9e" target="_blank">
+                    구글 드라이브 폴더 열기 →
+                </a>
+            </span>
+        </div>
+        <div class="guide-step">
+            <div class="step-num">2</div>
+            <span>PDF 파일을 폴더에 업로드</span>
+        </div>
+        <div class="guide-step">
+            <div class="step-num">3</div>
+            <span>파일 우클릭 → <b>공유</b> → <b>링크 복사</b><br>
+            <small style="opacity:.6">공유 설정: "링크가 있는 모든 사용자" 로 변경 필요</small></span>
+        </div>
+        <div class="guide-step">
+            <div class="step-num">4</div>
+            <span>아래에 링크 붙여넣기</span>
+        </div>
+    </div>
+
+    <!-- 링크 입력 -->
+    <div class="input-group">
+        <div class="input-label">Google Drive 공유 링크</div>
+        <div class="input-wrap">
+            <input type="text" id="drive-link"
+                   placeholder="https://drive.google.com/file/d/..."
+                   oninput="hideError()">
+            <button class="convert-btn" onclick="convert()">변환</button>
+        </div>
+    </div>
+
+    <div id="error-msg"></div>
+
+    <!-- 결과 -->
+    <div id="result-wrap">
+        <div class="result-label">플립북 링크가 생성되었습니다</div>
+        <div class="link-row">
+            <input type="text" id="result-link" readonly>
+            <button class="copy-btn" id="copy-btn" onclick="copyLink()">복사</button>
+        </div>
+        <button class="open-btn" onclick="openViewer()">플립북으로 열기 →</button>
+        <button class="reset-btn" onclick="reset()">다른 링크 변환</button>
+    </div>
+</div>
+
+<script>
+    var VIEWER_URL = location.origin + location.pathname.replace('upload.html', 'index.html');
+
+    /* Google Drive 링크에서 파일 ID 추출 */
+    function extractFileId(url) {
+        url = url.trim();
+        /* 형식 1: /file/d/FILE_ID/ */
+        var m = url.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+        if (m) return m[1];
+        /* 형식 2: ?id=FILE_ID 또는 &id=FILE_ID */
+        m = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+        if (m) return m[1];
+        /* 형식 3: /folders/FILE_ID */
+        m = url.match(/\/folders\/([a-zA-Z0-9_-]{10,})/);
+        if (m) return m[1];
+        return null;
+    }
+
+    function convert() {
+        var raw = document.getElementById('drive-link').value;
+        if (!raw.trim()) { showError('링크를 입력해주세요.'); return; }
+
+        var fileId = extractFileId(raw);
+        if (!fileId) {
+            showError('올바른 Google Drive 링크가 아닙니다.\n파일 링크를 다시 확인해주세요.');
+            return;
+        }
+
+        var link = VIEWER_URL + '?id=' + fileId;
+        document.getElementById('result-link').value = link;
+        document.getElementById('result-wrap').style.display = 'flex';
+        hideError();
+    }
+
+    function copyLink() {
+        var val = document.getElementById('result-link').value;
+        navigator.clipboard.writeText(val).then(function () {
+            var btn = document.getElementById('copy-btn');
+            btn.textContent = '복사됨 ✓';
+            btn.classList.add('copied');
+            setTimeout(function () { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
+        });
+    }
+
+    function openViewer() {
+        window.open(document.getElementById('result-link').value, '_blank');
+    }
+
+    function reset() {
+        document.getElementById('drive-link').value = '';
+        document.getElementById('result-wrap').style.display = 'none';
+        hideError();
+    }
+
+    function showError(msg) {
+        var el = document.getElementById('error-msg');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+    function hideError() {
+        document.getElementById('error-msg').style.display = 'none';
+    }
+
+    /* 엔터키로 변환 */
+    document.getElementById('drive-link').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') convert();
+    });
+</script>
+
+</body>
+</html>

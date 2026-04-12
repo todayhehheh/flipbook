@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>꿈드림 플립북 서비스</title>
+
+    <link href="dflip/css/dflip.min.css" rel="stylesheet" type="text/css">
+    <link href="dflip/css/themify-icons.min.css" rel="stylesheet" type="text/css">
+    <link rel="preload" href="document.pdf" as="fetch" crossorigin="anonymous">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #1a1a2e;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        #app {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ── 로딩 오버레이 ── */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 18px;
+            transition: opacity 0.35s ease;
+        }
+        #loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader-ring {
+            width: 52px;
+            height: 52px;
+            border: 5px solid rgba(255,255,255,0.12);
+            border-top-color: #e8a838;
+            border-radius: 50%;
+            animation: spin 0.85s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loader-bar {
+            width: 180px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .loader-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e8a838, #f5c842);
+            border-radius: 2px;
+            animation: indeterminate 1.3s ease-in-out infinite;
+        }
+        @keyframes indeterminate {
+            0%   { transform: translateX(-100%); width: 55%; }
+            50%  { transform: translateX(80%);   width: 55%; }
+            100% { transform: translateX(220%);  width: 55%; }
+        }
+
+        .loader-text {
+            color: rgba(255,255,255,0.7);
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── 이어보기 토스트 ── */
+        #resume-toast {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 500;
+            background: rgba(20,20,40,0.92);
+            border: 1px solid rgba(232,168,56,0.4);
+            color: #fff;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            font-size: 13px;
+            padding: 10px 20px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+        #resume-toast.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #resume-toast .resume-go {
+            background: #e8a838;
+            border: none;
+            color: #1a1a2e;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        #resume-toast .resume-x {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.45);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 4px 6px;
+        }
+
+        /* ── 모바일 터치 영역 ── */
+        .df-ui-btn {
+            min-width: 40px !important;
+            min-height: 40px !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="loader-ring"></div>
+        <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+        <div class="loader-text">문서를 불러오는 중...</div>
+    </div>
+
+    <div id="resume-toast">
+        <span id="resume-msg"></span>
+        <button class="resume-go" id="resume-btn">이어보기</button>
+        <button class="resume-x"  id="resume-dismiss">✕</button>
+    </div>
+
+    <div id="app">
+        <div class="container">
+            <div class="_df_book" id="kkumdream_pdf"></div>
+        </div>
+    </div>
+
+    <script src="dflip/js/libs/jquery.min.js"></script>
+    <script src="dflip/js/dflip.min.js"></script>
+
+    <script>
+        /* ── Service Worker 등록 ── */
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(function () {});
+        }
+
+        /* ── Wake Lock (화면 꺼짐 방지) ── */
+        var wakeLock = null;
+        function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen')
+                    .then(function (lock) { wakeLock = lock; })
+                    .catch(function () {});
+            }
+        }
+        /* 탭 복귀 시 Wake Lock 재취득 */
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') requestWakeLock();
+        });
+
+        /* ── 기기 감지 ── */
+        var isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
+                        .test(navigator.userAgent) || window.innerWidth <= 1024;
+
+        /* ── 읽던 페이지 (localStorage) ── */
+        var STORAGE_KEY = 'kkumdream_lastPage';
+        var savedPage   = parseInt(localStorage.getItem(STORAGE_KEY), 10) || 0;
+        var bookInstance = null;
+
+        function saveCurrentPage(pageNum) {
+            if (pageNum && pageNum > 1) {
+                localStorage.setItem(STORAGE_KEY, pageNum);
+            }
+        }
+
+        function showResumeToast(page) {
+            var toast = document.getElementById('resume-toast');
+            document.getElementById('resume-msg').textContent = page + '페이지에서 이어보기';
+            toast.classList.add('show');
+
+            document.getElementById('resume-btn').onclick = function () {
+                if (bookInstance) bookInstance.gotoPage(page);
+                toast.classList.remove('show');
+            };
+            document.getElementById('resume-dismiss').onclick = function () {
+                localStorage.removeItem(STORAGE_KEY);
+                toast.classList.remove('show');
+            };
+
+            /* 6초 후 자동 닫기 */
+            setTimeout(function () { toast.classList.remove('show'); }, 6000);
+        }
+
+        /* ── 한글 변환 맵 ── */
+        var KO_LABELS = {
+            'df-ui-start'     : '첫 페이지',
+            'df-ui-prev'      : '이전 페이지',
+            'df-ui-next'      : '다음 페이지',
+            'df-ui-end'       : '마지막 페이지',
+            'df-ui-outline'   : '목차',
+            'df-ui-thumbnail' : '썸네일',
+            'df-ui-pagemode'  : '페이지 보기',
+            'df-ui-play'      : '자동 재생',
+            'df-ui-sound'     : '소리',
+            'df-ui-search'    : '검색',
+            'df-ui-share'     : '공유',
+            'df-ui-download'  : '다운로드',
+            'df-ui-fullscreen': '전체화면',
+            'df-ui-zoomin'    : '확대',
+            'df-ui-zoomout'   : '축소',
+            'df-ui-zoom'      : '화면 맞춤',
+            'df-ui-fit'       : '화면 맞춤',
+            'df-ui-more'      : '더보기',
+            'df-ui-alt'       : '더보기'
+        };
+
+        /* 텍스트 노드 직접 치환 (더보기 패널 등) */
+        var KO_TEXT = {
+            'Double Page Mode' : '더블 페이지',
+            'Single Page Mode' : '싱글 페이지',
+            'Goto First Page'  : '첫 페이지',
+            'Goto Last Page'   : '마지막 페이지',
+            'Next Page'        : '다음 페이지',
+            'Previous Page'    : '이전 페이지',
+            'Pause AutoPlay'   : '자동재생 정지',
+            'Start AutoPlay'   : '자동재생 시작',
+            'Toggle Fullscreen': '전체화면',
+            'Toggle Thumbnails': '썸네일',
+            'Toggle Help'      : '도움말',
+            'Zoom In'          : '확대',
+            'Zoom Out'         : '축소',
+            'Download PDF File': 'PDF 다운로드',
+            'Share'            : '공유',
+            'Loading'          : '불러오는 중'
+        };
+
+        function replaceTextNodes(root) {
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+            var node;
+            while ((node = walker.nextNode())) {
+                var t = node.textContent;
+                Object.keys(KO_TEXT).forEach(function (en) {
+                    if (t.indexOf(en) !== -1) {
+                        t = t.split(en).join(KO_TEXT[en]);
+                    }
+                });
+                node.textContent = t;
+            }
+        }
+
+        function applyKoreanLabels() {
+            /* title / aria-label */
+            Object.keys(KO_LABELS).forEach(function (cls) {
+                document.querySelectorAll('.' + cls).forEach(function (el) {
+                    el.title = KO_LABELS[cls];
+                    el.setAttribute('aria-label', KO_LABELS[cls]);
+                });
+            });
+            document.querySelectorAll('.df-ui-page input').forEach(function (el) {
+                el.setAttribute('aria-label', '페이지 번호');
+                el.setAttribute('placeholder', '페이지');
+            });
+            /* 텍스트 노드 치환 */
+            var ui = document.querySelector('.df-ui-wrapper') || document.body;
+            replaceTextNodes(ui);
+        }
+
+        /* 동적으로 추가되는 UI 요소도 한글로 (더보기 패널 등) */
+        var observer = new MutationObserver(function (mutations) {
+            mutations.forEach(function (m) {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) {
+                        replaceTextNodes(node);
+                        /* 새로 추가된 버튼의 title도 갱신 */
+                        Object.keys(KO_LABELS).forEach(function (cls) {
+                            if (node.classList && node.classList.contains(cls)) {
+                                node.title = KO_LABELS[cls];
+                                node.setAttribute('aria-label', KO_LABELS[cls]);
+                            }
+                            node.querySelectorAll('.' + cls).forEach(function (el) {
+                                el.title = KO_LABELS[cls];
+                                el.setAttribute('aria-label', KO_LABELS[cls]);
+                            });
+                        });
+                    }
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        /* ── 키보드 단축키 (PC) ── */
+        document.addEventListener('keydown', function (e) {
+            if (!bookInstance) return;
+            if (e.target.tagName === 'INPUT') return;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') bookInstance.nextPage();
+            if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'  ) bookInstance.prevPage();
+            if (e.key === 'Home') bookInstance.gotoPage(1);
+            if (e.key === 'End')  bookInstance.gotoPage(9999);
+        });
+
+        /* ── Cloudflare Worker 프록시 URL (배포 후 여기 수정) ── */
+        var PROXY_URL = 'https://minibook.todayhehheh.workers.dev';
+
+        /* ── PDF 소스 결정 (URL ?id= 파라미터 우선) ── */
+        var urlParams = new URLSearchParams(location.search);
+        var driveId   = urlParams.get('id');
+        var pdfSource = driveId
+            ? PROXY_URL + '?url=' + encodeURIComponent('https://drive.google.com/uc?export=download&id=' + driveId)
+            : 'document.pdf';
+
+        /* ── dFlip 설정 ── */
+        var option_kkumdream_pdf = {
+            source: pdfSource,
+
+            singlePageMode: 0,
+            webgl: !isMobile,
+            maxTextureSize: isMobile ? 600 : 1000,
+            duration: isMobile ? 450 : 600,
+            soundEnable: false,
+
+            paddingTop:    isMobile ? 8  : 30,
+            paddingBottom: isMobile ? 8  : 30,
+            paddingLeft:   isMobile ? 4  : 16,
+            paddingRight:  isMobile ? 4  : 16,
+
+            forceFit: true,
+            autoEnableThumbnail: false,
+            autoEnableOutline:   false,
+            controlsPosition: 'bottom',
+
+            onReady: function (book) {
+                bookInstance = book;
+
+                /* 로딩 오버레이 제거 */
+                var overlay = document.getElementById('loading-overlay');
+                overlay.classList.add('hidden');
+                setTimeout(function () { overlay.style.display = 'none'; }, 400);
+
+                /* 한글 레이블 */
+                applyKoreanLabels();
+
+                /* Wake Lock */
+                requestWakeLock();
+
+                /* 전체화면 자동 진입 */
+                var el = document.documentElement;
+                var reqFS = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+                if (reqFS) reqFS.call(el).catch(function () {});
+
+                /* 이어보기 토스트 (2페이지 이상부터 표시) */
+                if (savedPage >= 2) {
+                    showResumeToast(savedPage);
+                }
+            },
+
+            onFlip: function (pageNum) {
+                saveCurrentPage(pageNum);
+            }
+        };
+    </script>
+
+</body>
+</html>
